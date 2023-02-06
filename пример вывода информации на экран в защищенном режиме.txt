@@ -1,0 +1,212 @@
+;âûâîä ñèìâîëîâ íà ýêðàí â çàùèù¸ííîì ðåæèìå 
+.386p	;ðàçðåøåíèå òðàíñëÿöèè âñåõ, â òîì ÷èñëå è ïðèâèëåãèðîâàííûõ êîìàíä ÌÏ 386 è 486
+;îïèñàíèå äåñêðèïòîðîâ ñåãìåíòà	
+descr	struc	
+limit	dw	0	;ãðàíèöà (áèòû 0…15)
+base_l	dw	0	;áàçà, áèòû 0…15
+base_m	db	0	;áàçà, áèòû 16…23
+attr_1	db	0	;áàéò àòðèáóòîâ 1
+attr_2	db	0	;ãðàíèöà (áèòû 16…19) è àòðèáóòû 2
+base_h	db	0	;áàçà, áèòû 24…31
+descr	ends
+;îïèñàíèå äåñêðèïòîðîâ ëîâóøåê
+trap	struc	
+offs_1	dw	0	
+sel	dw	16	
+rsrv	db	0	
+attr	db	8Fh	
+offs_h	dw	0	
+trap	ends	
+data segment use16	;16-ðàçðÿäíîå ïðèëîæåíèå
+
+;òàáëèöà ãëîáàëüíûõ äåñêðèïòîðîâ GDT
+gdt_0	label	word
+gdt_null	descr<0,0,0,0,0,0> 							;ñåëåêòîð 0-îáÿçàòåëüíûé íóëåâîé äåñêðèïòîð
+gdt_data	descr<data_size-1,0,0,92h,0,0>				;ñåëåêòîð 8-ñåãìåíò äàííûõ
+gdt_code	descr<code_size-1,0,0,98h,0,0>				;ñåëåêòîð 16-ñåãìåíò êîìàíä
+gdt_stack	descr<255,0,0,92h,0,0>						;ñåëåêòîð 24, ñåãìåíò ñòåêà
+gdt_screen	descr<4095,8000h,0Bh,92h,0,0>				;ñåëåêòîð 32, âèäåîáóôåð
+gdt_size=$-gdt_null	;ðàçìåð GDT	
+
+idt	label	word	
+trap	32 dup ()	
+idt_size=$-idt
+
+pdescr	dq	0		;ïñåâäîäåñêðèïòîð äëÿ LGDT
+sym	db	97			;ñèìâîë äëÿ âûâîäà íà ýêðàí
+stoka_name db  "TEST STRING"
+real_sp	dw	0		;ÿ÷åéêà äëÿ õðàíåíèÿ SP
+real_ss	dw	0		;ÿ÷åéêà äëÿ õðàíåíèÿ SS
+pos	dw	950
+mes	db 27,'Lets go back to the Real Mode!',27,'[0m$' 
+
+string	db '++++++++++'	;ñòðîêà
+len=$-string	;å¸ ðàçìåð
+
+data_size=$-gdt_null	;ðàçìåð ñåãìåíòà äàííûõ
+data	ends	;êîíåö ñåãìåíòà äàííûõ
+text	segment 'code' use16	;íà÷àëî ñåãìåíòà êîìàíä. Áóäåì ðàáîòàòü â 16-ðàçðÿäíîì ðåæèìå
+assume CS:text,DS:data
+begin	label	word
+;çàãëóøêà âìåñòî îáðàáîò÷èêà âñåõ èñêëþ÷åíèé, êîòîðûå ó íàñ îòñóòñòâóþò â çàùèùåííîì ðåæèìå
+dummy_exc	proc
+pop	EAX
+pop	EAX
+mov	SI,offset string+5
+mov	AX,1111b
+jmp	home
+dummy_exc	endp
+
+main	proc	
+xor	EAX,EAX		;î÷èñòêà EAX
+mov	AX,data		;èíèöèàëèçàöèÿ DS
+mov	DS,AX		;â ðåàëüíîì ðåæèìå
+
+;âû÷èñëèì 32-áèòîâûé ëèíåéíûé àäðåñ ñåãìåíòà äàííûõ è çàãðóçèì åãî â äåñêðèïòîð 
+;ñåãìåíòà äàííûõ â òàáëèöå GDT. Â ðåãèñòðå ÀÕ óæå íàõîäèòñÿ ñåãìåíòíûé àäðåñ. 
+shl	EAX,4					;óìíîæèì åãî íà 16
+mov	EBP,EAX					;ñîõðàíÿåì åãî â EBP
+mov	EBX, offset gdt_data	;íà BX àäðåñ äåñêðèïòîðà
+mov	[EBX].base_l,AX			;çàãðóçèì ìëàäøóþ ÷àñòü áàçû
+rol	EAX,16					;îáìåí ñòàðøåé è ìëàäøåé ÷àñòåé EAX
+mov	[EBX].base_m,AL			;çàãðóçèì ñðåäíþþ ÷àñòü áàçû
+
+;àíàëîãè÷íî äëÿ ëèíåéíîãî àäðåñà ñåãìåíòà êîìàíä
+xor	EAX,EAX				;î÷èùàåì EAX
+mov	AX,CS				;áåðåì àäðåñ ñåãìåíòà êîìàíä
+shl	EAX,4				;óìíîæàåì åãî íà 16
+mov	EBX,offset gdt_code ;àäðåñ äåñêðèïòîðà
+mov	[EBX].base_l,AX		;çàãðóçèì ìëàäøóþ ÷àñòü áàçû
+rol	EAX,16				;îáìåí ñòàðøåé è ìëàäøåé ÷àñòåé EAX
+mov	[EBX].base_m,AL		;çàãðóæàåì ñðåäíþþ ÷àñòü áàçû
+
+;àíàëîãè÷íî äëÿ ëèíåéíîãî àäðåñà ñåãìåíòà ñòåêà
+xor	EAX,EAX		;î÷èùàåì EAX
+mov	AX,SS		;áåðåì àäðåñ ñåãìåíòà ñòåêà
+shl	EAX,4		;óìíîæàåì åãî íà 16
+mov	EBX,offset gdt_stack	;àäðåñ äåñêðèïòîðà
+mov	[EBX].base_l,AX			;çàãðóçèì ìëàäøóþ ÷àñòü áàçû
+rol	EAX,16					;îáìåí ñòàðøåé è ìëàäøåé ÷àñòåé EAX
+mov	[EBX].base_m,AL			;çàãðóæàåì ñðåäíþþ ÷àñòü áàçû
+
+
+;ïîäãîòîâèì ïñåâäîäåñêðèïòîð pdescr è çàãðóçèì ðåãèñòð GDTR
+mov	dword ptr pdescr+2,EBP		;áàçà GDT, áèòû 0…31
+mov	word ptr pdescr, gdt_size-1	;ãðàíèöà GDT
+lgdt	pdescr					;çàãðóçèì ðåãèñòð GDTR
+
+;ïîäãîòîâèìñÿ ê ïåðåõîäó â çàùèù¸ííûé ðåæèì
+cli				;çàïðåò àïïàðàòíûõ ïðåðûâàíèé
+;çàãðóçèì IDTR
+mov	word ptr pdescr, idt_size-1		;ãðàíèöà IDT
+xor	EAX,EAX							;EAX=0
+mov	AX,offset idt					;ñìåùåíèå idt â ñåãìåíòå äàííûõ
+add	EAX,EBP							;ïëþñ ëèíåéíûé àäðåñ ñåãìåíòà äàííûõ
+mov	dword ptr pdescr+2,EAX  		;àäðåñ IDT â pdescr
+lidt	pdescr						;çàãðóçêà IDTR	
+
+;ïåðåõîäèì â çàùèù¸ííûé ðåæèì
+mov	EAX,CR0	;ïîëó÷èì ñëîâî ñîñòîÿíèÿ ìàøèíû
+or	EAX,1	;óñòàíîâèì áèò PE
+mov	CR0,EAX	;çàïèøåì íàçàä ñëîâî ñîñòîÿíèÿ
+
+;ìû â çàùèù¸ííîì ðåæèìå!
+;çàãðóæàåì â CS:IP ñåëåêòîð:ñìåùåíèå òî÷êè continue è çàîäíî î÷èùàåì î÷åðåäü êîìàíä
+db	0Eah				;êîä êîìàíäû far jmp - ïîäãÿäåë â èíåòå
+dw	offset continue		;ñìåùåíèå
+dw	16					;ñåëåêòîð ñåãìåíòà êîìàíä
+continue:
+
+;äåëàåì àäðåñóåìûìè äàííûìè
+mov	AX,8	;ñåëåêòîð ñåãìåíòà äàííûõ
+mov	DS,AX
+
+;äåëàåì àäðåñóåìûì ñòåê
+mov	AX,24	;ñåëåêòîð ñåãìåíòà ñòåê
+mov	SS,AX
+
+home:	mov	si,offset string
+mov	si,offset string
+mov	cx,len
+mov	ah,74h
+mov	di,1600
+scr:	lodsb
+stosw
+loop	scr
+
+
+;èíèöèàëèçèðóåì ES è âûâîäèì ñèìâîëû
+mov	AX,32	;ñåëåêòîð ñåãìåíòà âèäåîáóôåðà
+mov	ES,AX
+mov	BX,1800	;íà÷àëüíîå ñìåùåíèå íà ýêðàíå
+mov	CX,16	;÷èñëî âûâîäèìûõ ñèìâîëîâ
+;mov	AX,word ptr stoka_name	;íà÷àëüíûé ñèìâîë ñ àòðèáóòàìè
+mov si,0
+screen:	
+mov	AX,word ptr stoka_name[si]
+mov	ES:[BX], AX	;âûâîä â âèäåîáóôåð
+add	BX,2	;ñìåñòèìñÿ â âèäåîáóôåðå
+inc	si	;ñëåäóþùèé ñèìâîë
+loop	screen	;öèêë âûâîäà íà ýêðàí
+
+;ïîäãîòîâèì ïåðåõîä â ðåàëüíûé ðåæèì
+;ñôîðìèðóåì è çàãðóçèì äåñêðèïòîðû äëÿ ðåàëüíîãî ðåæèìà
+mov	gdt_data.limit,0FFFFh 	;ãðàíèöà ñåãìåíòà äàííûõ
+mov	gdt_code.limit,0FFFFh 	;ãðàíèöà ñåãìåíòà êîäà
+mov	gdt_stack.limit,0FFFFh 	;ãðàíèöà ñåãìåíòà ñòåêà
+mov	gdt_Screen.limit,0FFFFh 	;ãðàíèöà äîï. ñåãìåíòà 
+mov	AX,8	;çàãðóæàåì òåíåâîé ðåãèñòð
+mov	DS,AX	;ñåãìåíòà äàííûõ
+mov	Ax,24	;çàãðóæàåì òåíåâîé ðåãèñòð
+mov	SS,AX	;ñåãìåíòà ñòåêà
+mov	AX,32	;çàãðóæàåì òåíåâîé ðåãèñòð
+mov	ES,AX	;äîïîëíèòåëüíîãî ñåãìåíòà
+
+;âûïîëíèì äàëüíèé ïåðåõîä äëÿ òîãî, ÷òîáû çàíîâî çàãðóçèòü
+;ñåëåêòîð â ðåãèñòð CS è ìîäèôèöèðóåì åãî òåíåâîé ðåãèñòð
+db 0EAh			;êîìàíäîé äàëüíåãî ïåðåõîäà
+dw offset go	;çàãðóçèì òåíåâîé ðåãèñòð
+dw 16			;ñåãìåíòà êîìàíä
+;ïåðåêëþ÷èì ðåæèì ïðîöåññîðà
+
+go:	mov	EAX,CR0		;ïîëó÷èì ñîäåðæèìîå CR0
+and	EAX,0fffffffeh	;ñáðîñèì áèò PE
+mov	CR0,EAX			;çàïèøåì íàçàä â CR0
+
+db 0EAh	;êîä êîìàíäû far jmp
+dw offset return	;ñìåùåíèå
+dw text	;ñåãìåíò
+
+;òåïåðü ïðîöåññîð ñíîâà ðàáîòàåò â ðåàëüíîì ðåæèìå
+;âîññòàíîâèì îïåðàöèîííóþ ñðåäó ðåàëüíîãî ðåæèìà
+return:	mov	AX,data	;âîññòàíîâèì àäðåñóåìîñòü
+mov	DS,AX	;äàííûõ
+mov	AX,stk	;àäðåñóåìîñòü
+mov	SS,AX	;ñòåêà
+mov	SP,256
+mov	SS,real_ss
+;Âîññòàíîâèì ñîñòîÿíèå ðåãèñòðà IDTR ðåàëüíîãî ðåæèìà (õîòÿ ìîæíî è íå äåëàòü)
+mov	ax,3ffh	;ãðàíèöà òàáëèöû âåêòîðîâ
+mov	word ptr pdescr,AX 
+mov	eax,0	;ñìåùåíèå òàáëèöû âåêòîðîâ
+mov	dword ptr pdescr+2,EAX 
+lidt	pdescr	;çàãðóçèì pdescr IDTR 
+
+;ðàçðåøèì àïïàðàòíûå è íåìàñêèðóåìûå ïðåðûâàíèÿ
+sti	 ;ðàçðåøåíèå ïðåðûâàíèé
+
+;ïðîâåðèì âûïîëíåíèå ôóíêöèé DOS ïîñëå âîçâðàòà â ðåàëüíûé ðåæèì
+mov	AH,09h ;ôóíêöèè âûâîäà íà ýêðàí ñòðîêè
+mov	EDX,offset mes	;àäðåñ ñòðîêè
+int	21h	;âûçîâ DOS
+mov	AX,4C00h	;çàâåðøàåì ïðîãðàììó
+int	21h	;îáû÷íûì îáðàçîì
+main	endp	;êîíåö ãëàâíîé ïðîöåäóðû
+
+code_size=$-main	;ðàçìåð ñåãìåíòà êîìàíä
+text	ends	;êîíåö ñåãìåíòà êîìàíä
+
+stk	segment stack 'stack'	;íà÷àëî ñåãìåíòà ñòåêà
+db	256 dup ('^')
+stk	ends	;êîíåö ñåãìåíòà ñòåêà
+end main	;êîíåö ïðîãðàììû
